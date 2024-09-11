@@ -11,12 +11,8 @@ def load_data():
     Y = data['Y'].ravel()
 
     df_X = pd.DataFrame(X_dense)
-    df_Y = pd.DataFrame(Y)
+    df_Y = pd.Series(Y, name='Spam')
 
     df_X = df_X.T
-
-    df_Y = df_Y.rename(columns={0: 'Spam'})
-    #df_Y['Spam'] = df_Y['Spam'].replace(1, 'Yes')
-    #df_Y['Spam'] = df_Y['Spam'].replace(-1, 'No')
 
     return df_X, df_Y

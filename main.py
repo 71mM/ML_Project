@@ -5,12 +5,17 @@ from lreg import logistic_regression
 from sklearn.model_selection import train_test_split
 
 X, y = load_data()
-print(y.value_counts())
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+test_size = 0.2
+val_size = 0.2
+random_state = 42
+n_splits = 10
 
-print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
+X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=(test_size + val_size), random_state=random_state)
 
-random_forest(X_train, X_test, y_train, y_test)
-svm(X_train, X_test, y_train, y_test)
-logistic_regression(X_train, X_test, y_train, y_test)
+test_val_split = val_size / (test_size + val_size)
+X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=test_val_split, random_state=random_state)
+
+#random_forest(X_train, X_test, y_train, y_test)
+svm(X_train, X_test, X_val, y_train, y_test, y_val, random_state, n_splits)
+#logistic_regression(X_train, X_test, y_train, y_test)

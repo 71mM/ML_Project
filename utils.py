@@ -1,5 +1,6 @@
 import pandas as pd
 import scipy.io
+from sklearn.feature_extraction.text import TfidfTransformer
 
 
 def load_data():
@@ -13,6 +14,14 @@ def load_data():
     df_X = pd.DataFrame(X_dense)
     df_Y = pd.Series(Y, name='Spam')
 
-    df_X = df_X.T
 
+    df_X = tf_idf(df_X)
+    df_X = df_X.T
     return df_X, df_Y
+
+
+def tf_idf(X):
+    transformer = TfidfTransformer(smooth_idf=False)
+    tfidf = transformer.fit_transform(X)
+    tfidf = pd.DataFrame(tfidf.todense())
+    return tfidf

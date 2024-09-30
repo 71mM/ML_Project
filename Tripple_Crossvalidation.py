@@ -4,10 +4,9 @@ from skopt import BayesSearchCV
 from utils import save_model
 
 
-
 def triple_cross_validation(model, X_train, X_val, X_test, y_train, y_val, y_test, param_grid, modelname):
     print("Tripple Cross Validierung:")
-    precision_scorer = make_scorer(precision_score)
+    precision_scorer = make_scorer(precision_min_scorer)
     model.fit(X_train, y_train)
     grid_search = BayesSearchCV(model, param_grid, cv=2, scoring=precision_scorer, verbose=3, n_jobs=-1)
 
@@ -27,3 +26,13 @@ def triple_cross_validation(model, X_train, X_val, X_test, y_train, y_val, y_tes
     print("------------------------------------------------------------------------------------------------------------")
     save_model(best_model, modelname)
     return best_model
+
+
+def custom_precision_score(y_true, y_pred):
+    return precision_score(y_true, y_pred, pos_label=-1)
+
+
+def precision_min_scorer(estimator, X, y):
+    score = custom_precision_score(y, estimator.predict(X))
+    min_precision = 0.998
+    return score if score >= min_precision else 0

@@ -4,11 +4,12 @@ from skopt import BayesSearchCV
 from utils import save_model
 
 
+
 def triple_cross_validation(model, X_train, X_val, X_test, y_train, y_val, y_test, param_grid, modelname):
     print("Tripple Cross Validierung:")
-    precision_scorer = make_scorer(precision_min_scorer)
+    no_spam_precision_scorer = make_scorer(precision_for_no_spam)
     model.fit(X_train, y_train)
-    grid_search = BayesSearchCV(model, param_grid, cv=2, scoring=precision_scorer, verbose=3, n_jobs=-1)
+    grid_search = BayesSearchCV(model, param_grid, cv=2,  scoring=no_spam_precision_scorer, n_jobs=-1, verbose=3)
 
     grid_search.fit(X_val, y_val)
 
@@ -17,7 +18,10 @@ def triple_cross_validation(model, X_train, X_val, X_test, y_train, y_val, y_tes
     best_model.fit(np.vstack((X_train, X_val)), np.concatenate((y_train, y_val)))
 
     y_test_pred = best_model.predict(X_test)
-    print(classification_report(y_test, y_test_pred))
+
+    report = classification_report(y_test, y_test_pred, digits=4, output_dict=True)
+    print(" - Precision für nicht Spam : ", report['-1']['precision'], "   - Precision für Spam: ", report['1']['precision'])
+    print(" - Recall für nicht Spam :  ", report['-1']["recall"], "       - Recall für Spam:  ", report['1']["recall"])
 
     print("Beste Parameter:")
     for param in param_grid.keys():
@@ -28,11 +32,5 @@ def triple_cross_validation(model, X_train, X_val, X_test, y_train, y_val, y_tes
     return best_model
 
 
-def custom_precision_score(y_true, y_pred):
-    return precision_score(y_true, y_pred, pos_label=-1)
-
-
-def precision_min_scorer(estimator, X, y):
-    score = custom_precision_score(y, estimator.predict(X))
-    min_precision = 0.998
-    return score if score >= min_precision else 0
+def precision_for_no_spam(y_true, y_pred):
+    return precision_score(y_true, y_pred, labels=[-1], zero_division=0)

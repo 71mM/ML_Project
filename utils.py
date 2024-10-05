@@ -1,12 +1,13 @@
 import scipy.io
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfTransformer
-from sklearn.metrics import precision_recall_curve, auc, PrecisionRecallDisplay, classification_report, precision_score
+from sklearn.metrics import precision_recall_curve, auc, PrecisionRecallDisplay, classification_report, precision_score, confusion_matrix, recall_score
 import matplotlib.pyplot as plt
 import pickle
 import os
 import numpy as np
-from sklearn.tree import plot_tree
+import seaborn as sns
+
 
 
 
@@ -58,8 +59,6 @@ def determine_better_data(model1, name1, model2, name2, X1, X2, y, dummy, dummy_
 
     fig, ax = plt.subplots()
 
-    ax.plot([0, 1], [0, 1], 'k--')
-
     # Begrenzungen setzen
     ax.set_xlim([0.0, 1.0])
     ax.set_ylim([0.0, 1.05])
@@ -83,6 +82,8 @@ def determine_better_data(model1, name1, model2, name2, X1, X2, y, dummy, dummy_
     ax.legend(loc='best', bbox_to_anchor=(1, 1))
 
     # Plot anzeigen
+    save_folder = 'Data/bilder'
+    plt.savefig(os.path.join(save_folder, f'{name1}_visualization.pdf'))
     plt.show()
     if name1 is not None:
         y_score_no_spam_1 = model1.predict(X1)
@@ -107,7 +108,7 @@ def determine_better_data(model1, name1, model2, name2, X1, X2, y, dummy, dummy_
     precision_dummy_no_spam = precision_score(y, y_score_dummy, zero_division=0)
 
 
-    if report_1["-1"]['precision'] > report_2["-1"]['precision'] and report_1["-1"]['precision'] > precision_dummy_no_spam:
+    if report_1["-1"]['precision'] >= report_2["-1"]['precision'] and report_1["-1"]['precision'] > precision_dummy_no_spam:
         better_model = model1
         better_data = name1
         better_precision = [report_1["-1"]['precision'], report_1["1"]['precision']]
@@ -139,7 +140,7 @@ def determine_better_data(model1, name1, model2, name2, X1, X2, y, dummy, dummy_
 
 def find_best_model(*models):
     results = []
-    fig, axs = plt.subplots(2, len(models), figsize=(15, 8))  # 2 rows of plots: one for PrC and one for decision boundary
+    fig, axs = plt.subplots(2, len(models), figsize=(15, 12))
 
     for idx, model_entry in enumerate(models):
         model_name = model_entry['name']
@@ -147,70 +148,46 @@ def find_best_model(*models):
         X_test = model_entry['X_test']
         y_test = model_entry['y_test']
 
-        # Handle Dummy Classifier separately
-        if model_name == 'Dummy':
-            # Check if predict_proba exists
-            if hasattr(model, 'predict_proba'):
-                y_score = model.predict_proba(X_test)[:, 1]
-            else:
-                # Assign probabilities based on the most frequent class
-                most_frequent_class = model.predict(X_test)[0]
-                y_score = np.full_like(y_test, 1.0 if most_frequent_class == 1 else 0.0)
+        y_pred = model.predict(X_test)
 
-            # Precision-Recall for dummy classifier
-            precision, recall, _ = precision_recall_curve(y_test, y_score)
-            model_auc = auc(recall, precision)
-            y_pred = model.predict(X_test)
-        else:
-            # Handle models that support either predict_proba or decision_function
-            if hasattr(model, 'predict_proba'):
-                y_score = model.predict_proba(X_test)[:, 1]
-            elif hasattr(model, 'decision_function'):
-                y_score = model.decision_function(X_test)
-            else:
-                raise ValueError(f"Model {model_name} does not support predict_proba or decision_function")
+        y_score = np.where(y_pred == -1, -1, 1)
 
-            # Calculate Precision-Recall Curve
-            precision, recall, _ = precision_recall_curve(y_test, y_score)
-            model_auc = auc(recall, precision)
 
-            # Threshold for classification (e.g., threshold = 0.5)
-            threshold = 0.5
-            y_pred = (y_score >= threshold).astype(int)
+        precision, recall, _ = precision_recall_curve(y_test, y_score)
+        model_auc = auc(recall, precision)
 
-        # Plot the Precision-Recall curve
+
         axs[0, idx].plot(recall, precision, label=f'{model_name} (AUC={model_auc:.2f})')
         axs[0, idx].set_xlabel('Recall')
         axs[0, idx].set_ylabel('Precision')
         axs[0, idx].set_title(f'PrC: {model_name}')
         axs[0, idx].legend()
 
-        # Store results
+        # Plot the Confusion Matrix
+        cm = confusion_matrix(y_test, y_pred, labels=[-1, 1])
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=axs[1, idx], xticklabels=['nicht Spam', 'Spam'],
+                    yticklabels=['nicht Spam', 'Spam'])
+        axs[1, idx].set_xlabel('Predicted')
+        axs[1, idx].set_ylabel('Actual')
+        axs[1, idx].set_title(f'Confusion Matrix: {model_name}')
+
+        report = classification_report(y_test, y_pred, digits=4, output_dict=True)
         results.append({
             'model_name': model_name,
-            'precision': max(precision),
-            'recall': max(recall),
-            'auc': model_auc
+            'precision': [report['-1']['precision'], report['1']['precision']],
+            'recall': [report['-1']["recall"], report['1']["recall"]],
+            'auc': model_auc,
+            'model': model
         })
 
-        # Plot the decision boundary for interpretable models
-        if model_name != 'Dummy' and hasattr(model, 'predict'):
-            plot_decision_boundary(model, X_test, y_test, axs[1, idx], model_name)
 
-            # If the model is a DecisionTreeClassifier, plot its structure
-            if hasattr(model, 'tree_'):
-                fig_tree, ax_tree = plt.subplots(figsize=(12, 8))
-                plot_tree(model, ax=ax_tree, filled=True, feature_names=['PCA1', 'PCA2'])  # Adjust feature names as necessary
-                ax_tree.set_title(f'Decision Tree Structure: {model_name}')
-                plt.show()
-
-    # Show all visualizations
     plt.tight_layout()
+    save_folder = 'Data/bilder'
+    plt.savefig(os.path.join(save_folder, f'{model_name}_visualization.pdf'))
     plt.show()
 
-    # Sort models by precision, recall, and AUC
-    precision_ranking = sorted(results, key=lambda x: x['precision'], reverse=True)
-    recall_ranking = sorted(results, key=lambda x: x['recall'], reverse=True)
+    precision_ranking = sorted(results, key=lambda x: x['precision'][0], reverse=True)
+    recall_ranking = sorted(results, key=lambda x: x['recall'][0], reverse=True)
     overall_ranking = sorted(results, key=lambda x: x['auc'], reverse=True)
 
     return {
@@ -218,7 +195,6 @@ def find_best_model(*models):
         'recall_ranking': recall_ranking,
         'overall_ranking': overall_ranking
     }
-
 
 def save_model(model, modelname):
     directory = 'Data/modelle'  # Ensure the directory path is correct
@@ -229,23 +205,3 @@ def save_model(model, modelname):
         pickle.dump(model, file)
 
     print(f"Model saved as {filename}")
-
-
-def plot_decision_boundary(model, X, y, ax, model_name):
-    # Ensure X is in the correct format (NumPy array)
-    if isinstance(X, pd.DataFrame):
-        X = X.values
-
-    # Define grid range using NumPy indexing
-    x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() + 1
-    y_min, y_max = X[:, 1].min() - 1, X[:, 1].max() + 1
-    xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.01), np.arange(y_min, y_max, 0.01))
-
-    # Predict on grid
-    Z = model.predict(np.c_[xx.ravel(), yy.ravel()])
-    Z = Z.reshape(xx.shape)
-
-    # Plot decision boundary and test points
-    ax.contourf(xx, yy, Z, alpha=0.4, cmap=plt.cm.coolwarm)
-    ax.scatter(X[:, 0], X[:, 1], c=y, s=30, edgecolor='k', cmap=plt.cm.coolwarm)
-    ax.set_title(f'Decision Boundary: {model_name}')

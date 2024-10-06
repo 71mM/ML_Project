@@ -3,7 +3,7 @@ from skopt.space import Real, Integer, Categorical
 # Parameter Grid für Decision Tree
 decision_tree_grid = {
     'criterion': Categorical(['gini', 'entropy']),
-    'max_depth': Categorical([None] + list(range(1, 111, 10))),
+    'max_depth': Categorical([None] + list(range(1, 81, 10))),
     'min_samples_split': Integer(2, 10),
     'min_samples_leaf': Integer(1, 4),
     'max_features': Categorical([None, 'sqrt', 'log2']),
@@ -14,7 +14,7 @@ decision_tree_grid = {
 # Parameter Grid für Random Forest
 random_forest_grid = {
     'n_estimators': Integer(50, 200),
-    'max_depth': Categorical([None] + list(range(1, 111, 10))),
+    'max_depth': Categorical([None] + list(range(1, 81, 10))),
     'min_samples_split': Integer(2, 10),
     'min_samples_leaf': Integer(1, 4),
     'bootstrap': Categorical([True, False]),

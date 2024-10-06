@@ -9,7 +9,7 @@ import os
 
 
 def triple_cross_validation(model, X_train, X_val, X_test, y_train, y_val, y_test, param_grid, modelname):
-    return model
+
     print("Tripple Cross Validierung:")
     no_spam_precision_scorer = make_scorer(precision_for_no_spam)
     bayes_search = BayesSearchCV(model, param_grid, cv=2,  scoring=no_spam_precision_scorer, n_jobs=-1, verbose=3)
@@ -66,7 +66,8 @@ def plot_learning_curve(estimator, title, X, y, cv=None, n_jobs=1, train_sizes=n
              label="Cross-validation score")
 
     plt.legend(loc="best")
-    plt.show()
     save_folder = 'Data/bilder'
     plt.savefig(os.path.join(save_folder, f'{title}_visualization.pdf'))
+    plt.show()
+
     return plt

@@ -11,10 +11,12 @@ from Tripple_Crossvalidation import triple_cross_validation
 import paramGrid
 import matplotlib.pyplot as plt
 import os
+import numpy as np
+from wordcloud import WordCloud
+import pandas as pd
 import seaborn as sns
 
 
-calculate_everything_new = True
 X, y = load_data()
 
 print(X.head())
@@ -22,29 +24,88 @@ print(y.head())
 print(X.tail())
 print(y.tail())
 
-# Check for missing values
 print(X.isnull().sum())
 print(y.isnull().sum())
 
-# Display the shape of the datasets
 print(X.shape)
 print(y.shape)
 
-visualize = X
-visualize['kategorie'] = y
-visualize = visualize.groupby('kategorie').sum()
-# Erstelle die Heatmap
-plt.figure(figsize=(10, 8))
-sns.heatmap(visualize, annot=True, fmt="d", cmap="YlGnBu", linewidths=.5)
+spam_indices = np.where(y == 1)[0]
+not_spam_indices = np.where(y == -1)[0]
+
+spam_word_counts = np.array(X.iloc[spam_indices].sum(axis=0)).flatten()
+not_spam_word_counts = np.array(X.iloc[not_spam_indices].sum(axis=0)).flatten()
+
+num_features = X.shape[1]
+
+placeholder_words = [f'word{i}' for i in range(num_features)]
 
 
-plt.title('Wort-Häufigkeit Heatmap')
-plt.xlabel('Wörter')
-plt.ylabel('E-Mails')
-plt.show()
+spam_word_freq = {placeholder_words[idx]: spam_word_counts[idx] for idx in range(num_features)}
+not_spam_word_freq = {placeholder_words[idx]: not_spam_word_counts[idx] for idx in range(num_features)}
+
+spam_wc = WordCloud(width=800, height=400, background_color='white').generate_from_frequencies(spam_word_freq)
+not_spam_wc = WordCloud(width=800, height=400, background_color='white').generate_from_frequencies(not_spam_word_freq)
+
+
+plt.figure(figsize=(10, 5))
+plt.subplot(1, 2, 1)
+plt.imshow(spam_wc, interpolation='bilinear')
+plt.title('Spam Wordcloud')
+plt.axis('off')
+
+plt.subplot(1, 2, 2)
+plt.imshow(not_spam_wc, interpolation='bilinear')
+plt.title('Not Spam Wordcloud')
+plt.axis('off')
+
+plt.tight_layout()
 save_folder = 'Data/bilder'
-plt.savefig(os.path.join(save_folder, 'Daten_visualization.pdf'))
-input()
+if not os.path.exists(save_folder):
+    os.makedirs(save_folder)
+
+plt.savefig(os.path.join(save_folder, 'wordcloud_visualization.pdf'))
+plt.show()
+
+email_lengths = X.sum(axis=1).values
+
+X_tfidf = tf_idf(X)
+tfidf_sums = X_tfidf.sum(axis=1).values
+
+fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(10, 12))
+
+
+sns.scatterplot(ax=axes[0], x=np.arange(len(email_lengths)), y=email_lengths, hue=y, palette={1: 'red', -1: 'blue'}, legend='full')
+axes[0].set_title('Scatterplot der E-Mail-Längen, gefärbt nach Spam/Nicht-Spam')
+axes[0].set_xlabel('E-Mail Index')
+axes[0].set_ylabel('E-Mail Länge (Wörteranzahl)')
+axes[0].legend(title='Kategorie', loc='upper right', labels=['Nicht-Spam', 'Spam'])
+
+sns.scatterplot(ax=axes[1], x=np.arange(len(tfidf_sums)), y=tfidf_sums, hue=y, palette={1: 'red', -1: 'blue'})
+axes[1].set_title('Scatterplot der TF-IDF-Summen, gefärbt nach Spam/Nicht-Spam')
+axes[1].set_xlabel('E-Mail Index')
+axes[1].set_ylabel('Summe der TF-IDF Werte')
+axes[1].legend(title='Kategorie', loc='upper right', labels=['Nicht-Spam', 'Spam'])
+
+plt.tight_layout()
+save_folder = 'Data/bilder'
+if not os.path.exists(save_folder):
+    os.makedirs(save_folder)
+
+plt.savefig(os.path.join(save_folder, 'scatter_visualization.pdf'))
+plt.show()
+
+spam_top_10 = sorted(spam_word_freq.items(), key=lambda x: x[1], reverse=True)[:10]
+not_spam_top_10 = sorted(not_spam_word_freq.items(), key=lambda x: x[1], reverse=True)[:10]
+
+spam_ranking_df = pd.DataFrame(spam_top_10, columns=['Word', 'Frequency'])
+not_spam_ranking_df = pd.DataFrame(not_spam_top_10, columns=['Word', 'Frequency'])
+
+print("Top 10 Spam-Wörter nach Länge:")
+print(spam_ranking_df)
+
+print("Top 10 Nicht-Spam-Wörter nach Länge:")
+print(not_spam_ranking_df)
 
 test_size = 0.2
 val_size = 0.2
@@ -211,7 +272,7 @@ print("Beste Parameter:")
 for param in overall_best_params.keys():
     print(f'{param}: {overall_best_params[param]}')
 
-y_test_pred = overall_best_model_entry.predict(X_test)
+y_test_pred = overall_best_model.predict(X_test)
 report = classification_report(y_test, y_test_pred, digits=4, output_dict=True)
 print(" - Precision für nicht Spam : ", report['-1']['precision'], "   - Precision für Spam: ", report['1']['precision'])
 print(" - Recall für nicht Spam :  ", report['-1']["recall"], "       - Recall für Spam:  ", report['1']["recall"])

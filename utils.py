@@ -9,8 +9,6 @@ import numpy as np
 import seaborn as sns
 
 
-
-
 def load_data():
     path = "Data/emails.mat"
     data = scipy.io.loadmat(path)
@@ -59,11 +57,11 @@ def determine_better_data(model1, name1, model2, name2, X1, X2, y, dummy, dummy_
 
     fig, ax = plt.subplots()
 
-    # Begrenzungen setzen
+
     ax.set_xlim([0.0, 1.0])
     ax.set_ylim([0.0, 1.05])
 
-    # Achsenbeschriftungen
+
     ax.set_xlabel('Recall')
     ax.set_ylabel('Precision')
     ax.set_title('Precision-Recall-Kurve zum Modellvergleich')
@@ -78,10 +76,8 @@ def determine_better_data(model1, name1, model2, name2, X1, X2, y, dummy, dummy_
     display_dummy = PrecisionRecallDisplay(precision=precision_dummy, recall=recall_dummy)
     display_dummy.plot(ax=ax, label=dummy_name + f" (AUC = {auc_dummy:.2f})")
 
-    # Legende oben rechts
-    ax.legend(loc='best', bbox_to_anchor=(1, 1))
+    ax.legend(loc='lower right')
 
-    # Plot anzeigen
     save_folder = 'Data/bilder'
     plt.savefig(os.path.join(save_folder, f'{name1}_visualization.pdf'))
     plt.show()
@@ -140,51 +136,58 @@ def determine_better_data(model1, name1, model2, name2, X1, X2, y, dummy, dummy_
 
 def find_best_model(*models):
     results = []
-    fig, axs = plt.subplots(2, len(models), figsize=(15, 12))
+    num_models = len(models)
+    num_figures = (num_models + 1) // 2  # Anzahl der Figuren, maximal 2 Modelle pro Figur
 
-    for idx, model_entry in enumerate(models):
-        model_name = model_entry['name']
-        model = model_entry['model']
-        X_test = model_entry['X_test']
-        y_test = model_entry['y_test']
+    for fig_idx in range(num_figures):
+        fig, axs = plt.subplots(2, 2, figsize=(15, 12))  # Erstellen Sie 2x2 Subplots
+        axs = axs.flatten()  # Flatten für einfacheren Zugriff
 
-        y_pred = model.predict(X_test)
+        for idx in range(2):
+            model_index = fig_idx * 2 + idx
+            if model_index >= num_models:  # Wenn weniger als 2 Modelle vorhanden sind, brechen
+                break
 
-        y_score = np.where(y_pred == -1, -1, 1)
+            model_entry = models[model_index]
+            model_name = model_entry['name']
+            model = model_entry['model']
+            X_test = model_entry['X_test']
+            y_test = model_entry['y_test']
 
+            y_pred = model.predict(X_test)
+            y_score = np.where(y_pred == -1, -1, 1)
 
-        precision, recall, _ = precision_recall_curve(y_test, y_score)
-        model_auc = auc(recall, precision)
+            precision, recall, _ = precision_recall_curve(y_test, y_score)
+            model_auc = auc(recall, precision)
 
+            axs[fig_idx * 2 + idx].plot(recall, precision, label=f'{model_name} (AUC={model_auc:.2f})')
+            axs[fig_idx * 2 + idx].set_xlabel('Recall')
+            axs[fig_idx * 2 + idx].set_ylabel('Precision')
+            axs[fig_idx * 2 + idx].set_title(f'PrC: {model_name}')
+            axs[fig_idx * 2 + idx].legend()
 
-        axs[0, idx].plot(recall, precision, label=f'{model_name} (AUC={model_auc:.2f})')
-        axs[0, idx].set_xlabel('Recall')
-        axs[0, idx].set_ylabel('Precision')
-        axs[0, idx].set_title(f'PrC: {model_name}')
-        axs[0, idx].legend()
+            # Plot the Confusion Matrix
+            cm = confusion_matrix(y_test, y_pred, labels=[-1, 1])
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=axs[fig_idx * 2 + idx],
+                        xticklabels=['nicht Spam', 'Spam'],
+                        yticklabels=['nicht Spam', 'Spam'])
+            axs[fig_idx * 2 + idx].set_xlabel('Predicted')
+            axs[fig_idx * 2 + idx].set_ylabel('Actual')
+            axs[fig_idx * 2 + idx].set_title(f'Confusion Matrix: {model_name}')
 
-        # Plot the Confusion Matrix
-        cm = confusion_matrix(y_test, y_pred, labels=[-1, 1])
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=axs[1, idx], xticklabels=['nicht Spam', 'Spam'],
-                    yticklabels=['nicht Spam', 'Spam'])
-        axs[1, idx].set_xlabel('Predicted')
-        axs[1, idx].set_ylabel('Actual')
-        axs[1, idx].set_title(f'Confusion Matrix: {model_name}')
+            report = classification_report(y_test, y_pred, digits=4, output_dict=True)
+            results.append({
+                'model_name': model_name,
+                'precision': [report['-1']['precision'], report['1']['precision']],
+                'recall': [report['-1']["recall"], report['1']["recall"]],
+                'auc': model_auc,
+                'model': model
+            })
 
-        report = classification_report(y_test, y_pred, digits=4, output_dict=True)
-        results.append({
-            'model_name': model_name,
-            'precision': [report['-1']['precision'], report['1']['precision']],
-            'recall': [report['-1']["recall"], report['1']["recall"]],
-            'auc': model_auc,
-            'model': model
-        })
-
-
-    plt.tight_layout()
-    save_folder = 'Data/bilder'
-    plt.savefig(os.path.join(save_folder, f'{model_name}_visualization.pdf'))
-    plt.show()
+        plt.tight_layout()
+        save_folder = 'Data/bilder'
+        plt.savefig(os.path.join(save_folder, f'visualization_fig_{fig_idx + 1}.pdf'))
+        plt.show()
 
     precision_ranking = sorted(results, key=lambda x: x['precision'][0], reverse=True)
     recall_ranking = sorted(results, key=lambda x: x['recall'][0], reverse=True)
@@ -195,6 +198,7 @@ def find_best_model(*models):
         'recall_ranking': recall_ranking,
         'overall_ranking': overall_ranking
     }
+
 
 def save_model(model, modelname):
     directory = 'Data/modelle'  # Ensure the directory path is correct
